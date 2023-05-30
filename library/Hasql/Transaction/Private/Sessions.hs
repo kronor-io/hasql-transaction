@@ -15,7 +15,7 @@ error is seen.
 -}
 inRetryingTransaction :: IsolationLevel -> Mode -> Session (a, Bool) -> Bool -> Session a
 inRetryingTransaction level mode session preparable =
-  (fix $ \retry attempt -> do
+  (fix $ \retry !attempt -> do
     attemptRes <- tryTransaction level mode session preparable
     case attemptRes of
       Just a -> return a
@@ -32,9 +32,9 @@ inRetryingTransaction level mode session preparable =
             d <- lookupEnv "HASQL_TRANSACTION_RETRY_MAX_DELAY"
             return $ fromMaybe 30000 (d >>= readMaybe)
 
-          delay <- System.Random.randomRIO (minDelay, attempt * 3)
-          threadDelay (min maxDelay delay)
-          return delay
+          delay <- System.Random.randomRIO (0, min maxDelay (minDelay * 2 ^ attempt))
+          threadDelay delay
+          return (attempt + 1)
 
         retry delay
     ) 0
