@@ -21,8 +21,19 @@ inRetryingTransaction level mode session preparable =
         -- immediately retrying is not a good idea, because it may cause a
         -- thundering herd problem.  Instead, we wait a random amount of time
         -- before retrying.
-        delay <- liftIO $ System.Random.randomRIO (3000, attempt * 3)
-        liftIO $ threadDelay (min 30000 delay)
+        delay <- liftIO $ do
+          minDelay <- do
+            d <- lookupEnv "HASQL_TRANSACTION_RETRY_MIN_DELAY"
+            return $ fromMaybe 3000 (d >>= readMaybe)
+
+          maxDelay <- do
+            d <- lookupEnv "HASQL_TRANSACTION_RETRY_MAX_DELAY"
+            return $ fromMaybe 30000 (d >>= readMaybe)
+
+          delay <- System.Random.randomRIO (minDelay, attempt * 3)
+          threadDelay (min maxDelay delay)
+          return delay
+
         retry delay
     ) 0
 
