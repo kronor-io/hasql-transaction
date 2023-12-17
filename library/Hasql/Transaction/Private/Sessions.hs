@@ -5,6 +5,19 @@ import Hasql.Transaction.Config
 import Hasql.Transaction.Private.Prelude
 import qualified Hasql.Transaction.Private.Statements as Statements
 import qualified System.Random
+import System.IO.Unsafe (unsafePerformIO)
+
+{-# NOINLINE minDelay #-}
+minDelay, maxDelay :: Int
+minDelay = unsafePerformIO $ do
+  d <- lookupEnv "HASQL_TRANSACTION_RETRY_MIN_DELAY"
+  return $ fromMaybe 3000 (d >>= readMaybe)
+
+{-# NOINLINE maxDelay #-}
+maxDelay = unsafePerformIO $ do
+  d <- lookupEnv "HASQL_TRANSACTION_RETRY_MAX_DELAY"
+  return $ fromMaybe 30000 (d >>= readMaybe)
+
 
 {-
 We may want to
@@ -22,14 +35,6 @@ inRetryingTransaction level mode session preparable =
         -- thundering herd problem.  Instead, we wait a random amount of time
         -- before retrying.
         delay <- liftIO $ do
-          minDelay <- do
-            d <- lookupEnv "HASQL_TRANSACTION_RETRY_MIN_DELAY"
-            return $ fromMaybe 3000 (d >>= readMaybe)
-
-          maxDelay <- do
-            d <- lookupEnv "HASQL_TRANSACTION_RETRY_MAX_DELAY"
-            return $ fromMaybe 30000 (d >>= readMaybe)
-
           delay <- System.Random.randomRIO (0, min maxDelay (minDelay * 2 ^ attempt))
           threadDelay delay
           return (attempt + 1)
